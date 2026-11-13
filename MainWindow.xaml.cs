@@ -715,14 +715,6 @@ public partial class MainWindow : Window
 
     private System.Windows.Forms.NotifyIcon CreateTray()
     {
-        using var bitmap = new System.Drawing.Bitmap(32, 32);
-        using (var g = System.Drawing.Graphics.FromImage(bitmap))
-        {
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            using var brush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0xF2, 0xB0, 0x3D));
-            g.FillEllipse(brush, 5, 5, 22, 22);
-        }
-
         var autostart = new System.Windows.Forms.ToolStripMenuItem("Запускать при входе в Windows")
         {
             Checked = Settings.Autostart,
@@ -738,11 +730,17 @@ public partial class MainWindow : Window
 
         return new System.Windows.Forms.NotifyIcon
         {
-            Icon = System.Drawing.Icon.FromHandle(bitmap.GetHicon()),
+            Icon = LoadTrayIcon(),
             Text = "Claude Sessions",
             ContextMenuStrip = menu,
             Visible = true,
         };
+    }
+
+    private static System.Drawing.Icon LoadTrayIcon()
+    {
+        using var stream = typeof(MainWindow).Assembly.GetManifestResourceStream("app.ico")!;
+        return new System.Drawing.Icon(stream, System.Windows.Forms.SystemInformation.SmallIconSize);
     }
 
     private static Brush Frozen(string hex)

@@ -11,12 +11,18 @@
     <RootNamespace>ClaudeSessions</RootNamespace>
     <!-- CI overrides this from the release tag: -p:Version=X.Y.Z -->
     <Version>0.0.0</Version>
+    <ApplicationIcon>assets/app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- WinForms is only used for the tray icon; keep its namespaces out to avoid clashes with WPF. -->
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The tray picks its 16/24 px image from the same icon file. -->
+    <EmbeddedResource Include="assets/app.ico" LogicalName="app.ico" />
   </ItemGroup>
 
 </Project>

@@ -3,6 +3,7 @@
   "name": "Claude Sessions",
   "description": "Значок поверх окон: сколько сессий Claude Code работает, какие ждут ответа или решения. Клик — переход в нужный терминал.",
   "icon": "bell-dot",
+  "image": "assets/icon.png",
   "hue": 38,
   "kind": "exe",
   "entry": "ClaudeSessions.exe",

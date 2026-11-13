@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- 16–32 px cut: no inner dots, bigger pill and alert dot -->
+  <rect width="256" height="256" rx="48" fill="#262932"/>
+  <g transform="translate(124 126) scale(1.0) translate(-133 -118)">
+    <path fill="#E6E8EC" d="M78 96h92a46 46 0 0 1 0 92H78a46 46 0 0 1 0-92Z"/>
+    <circle cx="190" cy="88" r="52" fill="#262932"/>
+    <circle cx="190" cy="88" r="36" fill="#EF5B5B"/>
+  </g>
+</svg>
