@@ -34,6 +34,7 @@ jobs:
       - uses: actions/setup-go@v6 # only for stash-pack
         with:
           go-version: stable
+          cache: false # no go.mod here
 
       - name: Build
         # Self-contained: friends need no .NET runtime installed.
