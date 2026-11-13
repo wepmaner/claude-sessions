@@ -1,0 +1,16 @@
+{
+  "id": "claude-sessions",
+  "name": "Claude Sessions",
+  "description": "Значок поверх окон: сколько сессий Claude Code работает, какие ждут ответа или решения. Клик — переход в нужный терминал.",
+  "icon": "bell-dot",
+  "hue": 38,
+  "kind": "exe",
+  "entry": "ClaudeSessions.exe",
+  "data": ["${APPDATA}\\ClaudeSessions"],
+  "exclude": ["*.pdb"],
+  "requirements": [
+    { "label": "Windows 10+", "check": { "type": "os", "min": "10.0.19041" } },
+    { "label": "Claude Code", "check": { "type": "manual" } }
+  ],
+  "minStash": "0.1.9"
+}

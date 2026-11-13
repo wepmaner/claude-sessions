@@ -1,0 +1,85 @@
+name: release
+
+# A pushed tag vX.Y.Z builds ClaudeSessions.exe, packs it for Stash and publishes the release.
+# Run workflow by hand (workflow_dispatch) is the dry run: same build and package as 0.0.0-dev,
+# uploaded as a run artifact; nothing is released.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      APP_ID: claude-sessions # id from stash.json; never changes
+      TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v0.0.0-dev' }}
+      IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the whole history and tags, for the release notes
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-go@v6 # only for stash-pack
+        with:
+          go-version: stable
+
+      - name: Build
+        # Self-contained: friends need no .NET runtime installed.
+        run: |
+          VERSION="${TAG#v}"
+          dotnet publish ClaudeSessions.csproj -c Release -r win-x64 --self-contained true \
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:EnableCompressionInSingleFile=true -p:DebugType=none \
+            -p:Version="${VERSION}" -o dist
+
+      - name: Stash package
+        run: go run github.com/wepmaner/stash-pack/cmd/stash-pack@v0.1.5 -dir dist -manifest stash.json -version "${TAG}" -out stash-out
+
+      - name: Dry-run artifact
+        if: env.IS_TAG != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-sessions-dry-run
+          path: stash-out/*
+
+      - name: Release notes # the annotated tag text, else commit subjects since the previous tag
+        if: env.IS_TAG == 'true'
+        run: |
+          tag="${TAG}"
+          git fetch --force --tags --quiet
+          if [ "$(git cat-file -t "$tag")" = "tag" ]; then
+            git tag -l --format='%(contents)' "$tag" | sed '/-----BEGIN PGP/,$d' \
+              | sed -E 's/^([^-#[:space:]].*):[[:space:]]*$/## \1/' > notes.md
+          else
+            prev=$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || true)
+            git log --no-merges --format='%s' ${prev:+$prev..}"$tag" \
+              | grep -vE '^[[:space:].]*$' | sed 's/^/- /' > notes.md
+          fi
+          [ -s notes.md ] || echo "- Без описания" > notes.md
+
+      - name: Release
+        if: env.IS_TAG == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${TAG}" stash-out/* dist/ClaudeSessions.exe --notes-file notes.md
+
+      - name: Refresh the Stash catalogue # fails until the app has a CI token in Stash
+        if: env.IS_TAG == 'true'
+        continue-on-error: true
+        env:
+          STASH_CI_TOKEN: ${{ secrets.STASH_CI_TOKEN }}
+        run: |
+          curl -fsS -X POST -H "Authorization: Bearer ${STASH_CI_TOKEN}" \
+            "https://stash.stash-worker.workers.dev/v1/admin/refresh?app=${APP_ID}"
