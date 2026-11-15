@@ -18,7 +18,7 @@ internal sealed class Transcripts
     private static readonly string Root = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "projects");
 
-    private sealed record Entry(long Length, DateTime Modified, string? Title, bool AwaitingDecision);
+    private sealed record Entry(long Length, DateTime Modified, string? Title, bool AwaitingDecision, string? Cwd);
 
     private readonly Dictionary<string, Entry> _entries = new();
     private readonly object _gate = new();
@@ -49,14 +49,30 @@ internal sealed class Transcripts
         }
     }
 
-    private bool IsAwaitingDecisionLocked(string title)
+    /// <summary>
+    /// The folder Claude was started in for the session titled <paramref name="title"/>, from the logs already read.
+    /// Cheap enough to call for every tab on every pass: a busy log is not re-read here, only on the periodic relist.
+    /// </summary>
+    public string? FolderOf(string title)
+    {
+        lock (_gate)
+        {
+            RelistIfDue();
+            return FindByTitle(title) is { } path ? _entries[path].Cwd : null;
+        }
+    }
+
+    private void RelistIfDue()
     {
         var now = DateTime.Now;
-        if (now - _lastList > RelistEvery)
-        {
-            _lastList = now;
-            Relist(now);
-        }
+        if (now - _lastList <= RelistEvery) return;
+        _lastList = now;
+        Relist(now);
+    }
+
+    private bool IsAwaitingDecisionLocked(string title)
+    {
+        RelistIfDue();
 
         string? path = FindByTitle(title);
         if (path is null) return false;
@@ -133,14 +149,14 @@ internal sealed class Transcripts
         {
             var lines = ReadTailLines(info.FullName);
             var entry = new Entry(info.Length, info.LastWriteTime,
-                FindTitle(lines) ?? cached?.Title, HasUnansweredToolCall(lines));
+                FindTitle(lines) ?? cached?.Title, HasUnansweredToolCall(lines), FindCwd(lines) ?? cached?.Cwd);
             _entries[info.FullName] = entry;
             return entry;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             // The log is being rewritten. Nothing is cached, so the next pass reads it again.
-            return cached ?? new Entry(0, DateTime.MinValue, null, false);
+            return cached ?? new Entry(0, DateTime.MinValue, null, false, null);
         }
     }
 

@@ -54,7 +54,7 @@ public partial class App : Application
         {
             var lines = new List<string> { $"pass {pass} {DateTime.Now:HH:mm:ss}" };
             foreach (var s in scanner.Scan().Sessions)
-                lines.Add($"  {s.State,-13} focused={s.IsFocused,-5} since={s.Since:HH:mm:ss} name={s.Name} | {scanner.DescribeLog(s.Name)}");
+                lines.Add($"  {s.State,-13} focused={s.IsFocused,-5} since={s.Since:HH:mm:ss} name={s.Name} folder={s.Folder} | {scanner.DescribeLog(s.Name)}");
             File.AppendAllLines(path, lines);
             if (pass < passes) Thread.Sleep(1000);
         }

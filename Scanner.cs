@@ -8,7 +8,8 @@ namespace ClaudeSessions;
 /// </summary>
 public enum SessionState { Working, Waiting, NeedsDecision }
 
-public sealed record SessionInfo(string Key, string Name, SessionState State, DateTime Since, bool IsFocused);
+/// <param name="Folder">The folder Claude was started in; null until the session's log is found.</param>
+public sealed record SessionInfo(string Key, string Name, SessionState State, DateTime Since, bool IsFocused, string? Folder);
 
 public sealed record Snapshot(IReadOnlyList<SessionInfo> Sessions);
 
@@ -116,7 +117,8 @@ public sealed class Scanner
                     var since = _history.TryGetValue(key, out var prev) && prev.State == state ? prev.Since : now;
                     history[key] = (state.Value, since);
                     tabs[key] = (hwnd, tab);
-                    sessions.Add(new SessionInfo(key, name, state.Value, since, selected && hwnd == foreground));
+                    sessions.Add(new SessionInfo(key, name, state.Value, since, selected && hwnd == foreground,
+                        _transcripts.FolderOf(name)));
                 }
             }
             catch (Exception e) when (e is ElementNotAvailableException or InvalidOperationException

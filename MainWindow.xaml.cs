@@ -22,6 +22,8 @@ public partial class MainWindow : Window
     private static readonly Brush TextBrush = Frozen("#E6E8EC");
     private static readonly Brush DimTextBrush = Frozen("#8A8F9B");
     private static readonly Brush HoverBrush = Frozen("#323642");
+    private static readonly Brush HeadingBrush = Frozen("#7FA6F5");
+    private static readonly Brush DividerBrush = Frozen("#3A3E4A");
 
     private readonly Scanner _scanner = new();
     private readonly Settings _settings = Settings.Load();
@@ -185,26 +187,43 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RebuildRows(IReadOnlyList<SessionInfo> sessions, DateTime now)
+    private int Urgency(SessionInfo s, DateTime now) => IsAbandoned(s, now) ? 3 : s.State switch
     {
-        var ordered = sessions
-            .OrderBy(s => IsAbandoned(s, now) ? 3 : s.State switch
-            {
-                SessionState.NeedsDecision => 0,
-                SessionState.Waiting => 1,
-                _ => 2,
-            })
-            .ThenBy(s => s.Since)
+        SessionState.NeedsDecision => 0,
+        SessionState.Waiting => 1,
+        _ => 2,
+    };
+
+    /// <summary>
+    /// Sessions grouped by the folder Claude was started in. The group holding the most urgent session goes first;
+    /// sessions whose log is not found yet (no answer so far) go last.
+    /// </summary>
+    private List<(string? Folder, List<SessionInfo> Items)> GroupByFolder(IReadOnlyList<SessionInfo> sessions, DateTime now) =>
+        sessions
+            .GroupBy(s => s.Folder is null ? null : NormalizeFolder(s.Folder), StringComparer.OrdinalIgnoreCase)
+            .Select(g => (Folder: g.Key, Items: g.OrderBy(s => Urgency(s, now)).ThenBy(s => s.Since).ToList()))
+            .OrderBy(g => g.Folder is null)
+            .ThenBy(g => Urgency(g.Items[0], now))
+            .ThenBy(g => g.Items[0].Since)
             .ToList();
 
+    private static string NormalizeFolder(string path) => path.TrimEnd('\\', '/');
+
+    private static string FolderName(string path) =>
+        Path.GetFileName(path) is { Length: > 0 } name ? name : path;
+
+    private void RebuildRows(IReadOnlyList<SessionInfo> sessions, DateTime now)
+    {
+        var groups = GroupByFolder(sessions, now);
+
         // Rows are rebuilt only when something visible changed, so hovering and clicking stay stable.
-        string signature = string.Join("|", ordered.Select(s =>
-            $"{s.Key}/{s.Name}/{s.State}/{IsAbandoned(s, now)}/{s.IsFocused}/{Ago(now - s.Since)}"));
+        string signature = string.Join("#", groups.Select(g => g.Folder + ":" + string.Join("|", g.Items.Select(s =>
+            $"{s.Key}/{s.Name}/{s.State}/{IsAbandoned(s, now)}/{s.IsFocused}/{Ago(now - s.Since)}"))));
         if (signature == _rowsSignature) return;
         _rowsSignature = signature;
 
         Rows.Children.Clear();
-        if (ordered.Count == 0)
+        if (groups.Count == 0)
         {
             Rows.Children.Add(new TextBlock
             {
@@ -216,9 +235,37 @@ public partial class MainWindow : Window
             return;
         }
 
-        foreach (var s in ordered)
-            Rows.Children.Add(BuildRow(s, IsAbandoned(s, now), now));
+        // With everything in one folder a heading adds nothing.
+        bool headings = groups.Count > 1;
+        foreach (var (folder, items) in groups)
+        {
+            if (headings) Rows.Children.Add(BuildFolderHeading(folder, Rows.Children.Count == 0, indent: 12));
+            foreach (var s in items)
+                Rows.Children.Add(BuildRow(s, IsAbandoned(s, now), now));
+        }
     }
+
+    /// <summary>
+    /// Set apart from session names by shape, not only colour: dimmed names of abandoned sessions are the same grey.
+    /// Groups after the first get a divider above.
+    /// </summary>
+    private static Border BuildFolderHeading(string? folder, bool first, double indent) => new()
+    {
+        BorderBrush = DividerBrush,
+        BorderThickness = new Thickness(0, first ? 0 : 1, 0, 0),
+        Margin = new Thickness(0, first ? 0 : 6, 0, 0),
+        Padding = new Thickness(indent, first ? 4 : 8, 12, 3),
+        ToolTip = folder,
+        Child = new TextBlock
+        {
+            Text = (folder is null ? "Папка ещё не известна" : FolderName(folder)).ToUpperInvariant(),
+            FontSize = 10.5,
+            FontWeight = FontWeights.Bold,
+            Foreground = HeadingBrush,
+            MaxWidth = 300,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        },
+    };
 
     private Border BuildRow(SessionInfo s, bool abandoned, DateTime now)
     {
@@ -387,8 +434,16 @@ public partial class MainWindow : Window
         _savedSignature = signature;
 
         _savedPanel.Children.Clear();
-        foreach (var item in saved)
-            _savedPanel.Children.Add(BuildSavedRow(item));
+        var groups = saved.GroupBy(x => NormalizeFolder(x.Cwd), StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var group in groups)
+        {
+            if (groups.Count > 1)
+            {
+                _savedPanel.Children.Add(BuildFolderHeading(group.Key, _savedPanel.Children.Count == 0, indent: 30));
+            }
+            foreach (var item in group)
+                _savedPanel.Children.Add(BuildSavedRow(item));
+        }
         _savedPanel.Children.Add(BuildAction(new TextBlock
         {
             Text = "Восстановить все",
